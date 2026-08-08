@@ -4,6 +4,10 @@ import warnings
 import numpy as np
 @register_reranker("local")
 class LocalReranker(BaseReranker):
+    def __init__(self, config):
+        super().__init__(config)
+        self._encoder = None
+
     def get_similarity_score(self, s1: list[str], s2: list[str]) -> np.ndarray:
         from sentence_transformers import SentenceTransformer
         if not self.config.executor.debug:
@@ -19,7 +23,12 @@ class LocalReranker(BaseReranker):
             logging.getLogger("huggingface_hub.utils._http").setLevel(logging.ERROR)
             warnings.filterwarnings("ignore", category=FutureWarning)
 
-        encoder = SentenceTransformer(self.config.reranker.local.model, trust_remote_code=True)
+        if self._encoder is None:
+            self._encoder = SentenceTransformer(
+                self.config.reranker.local.model,
+                trust_remote_code=True,
+            )
+        encoder = self._encoder
         if self.config.reranker.local.encode_kwargs:
             encode_kwargs = self.config.reranker.local.encode_kwargs
         else:

@@ -90,12 +90,13 @@ class Executor:
         return corpus
 
     
-    def run(self):
-        corpus = self.fetch_zotero_corpus()
-        corpus = self.filter_corpus(corpus)
+    def run(self, corpus: list[CorpusPaper] | None = None, report_date: str | None = None) -> int:
+        if corpus is None:
+            corpus = self.fetch_zotero_corpus()
+            corpus = self.filter_corpus(corpus)
         if len(corpus) == 0:
             logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
-            return
+            return 0
         all_papers = []
         for source, retriever in self.retrievers.items():
             logger.info(f"Retrieving {source} papers...")
@@ -117,8 +118,9 @@ class Executor:
                 p.generate_affiliations(self.openai_client, self.config.llm)
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
-            return
+            return 0
         logger.info("Sending email...")
         email_content = render_email(reranked_papers)
-        send_email(self.config, email_content)
+        send_email(self.config, email_content, report_date=report_date)
         logger.info("Email sent successfully")
+        return len(reranked_papers)

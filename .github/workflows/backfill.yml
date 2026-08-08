@@ -1,0 +1,56 @@
+name: Backfill historical daily reports
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: First report date (YYYY-MM-DD)
+        required: true
+        default: '2026-07-01'
+      end_date:
+        description: Last report date (YYYY-MM-DD, maximum 31 days)
+        required: true
+        default: '2026-07-31'
+      max_papers:
+        description: Maximum recommended papers per day
+        required: true
+        default: '5'
+      send_empty:
+        description: Send reports for dates without papers
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: historical-daily-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill-and-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Backfill and send
+        env:
+          ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
+          ZOTERO_KEY: ${{ secrets.ZOTERO_KEY }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CUSTOM_CONFIG: ${{ vars.CUSTOM_CONFIG }}
+          BACKFILL_START_DATE: ${{ inputs.start_date }}
+          BACKFILL_END_DATE: ${{ inputs.end_date }}
+          BACKFILL_MAX_PAPERS: ${{ inputs.max_papers }}
+          BACKFILL_SEND_EMPTY: ${{ inputs.send_empty }}
+          BACKFILL_MAX_RESULTS: '500'
+          BACKFILL_EMAIL_DELAY_SECONDS: '8'
+        run: |
+          printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
+          uv run src/zotero_arxiv_daily/backfill.py

@@ -13,6 +13,7 @@ from time import sleep
 from typing import Any, Callable, TypeVar
 from loguru import logger
 import requests
+from datetime import date
 
 T = TypeVar("T")
 
@@ -114,6 +115,10 @@ class ArxivRetriever(BaseRetriever):
             raise ValueError("category must be specified for arxiv.")
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
+        target_date = self.retriever_config.get("date")
+        if target_date:
+            return self._retrieve_historical_papers(str(target_date))
+
         client = arxiv.Client(num_retries=10, delay_seconds=10)
         query = '+'.join(self.config.source.arxiv.category)
         include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
@@ -156,16 +161,56 @@ class ArxivRetriever(BaseRetriever):
 
         return raw_papers
 
+    def _retrieve_historical_papers(self, target_date: str) -> list[ArxivResult]:
+        try:
+            parsed_date = date.fromisoformat(target_date)
+        except ValueError as exc:
+            raise ValueError(
+                f"source.arxiv.date must use YYYY-MM-DD format, got {target_date!r}"
+            ) from exc
+
+        categories = list(self.config.source.arxiv.category)
+        compact_date = parsed_date.strftime("%Y%m%d")
+        category_query = " OR ".join(f"cat:{category}" for category in categories)
+        query = (
+            f"({category_query}) AND "
+            f"submittedDate:[{compact_date}0000 TO {compact_date}2359]"
+        )
+        max_results = int(self.retriever_config.get("max_results", 500))
+        if max_results < 1:
+            raise ValueError("source.arxiv.max_results must be greater than zero")
+
+        logger.info(f"Retrieving historical arXiv papers for {target_date}")
+        client = arxiv.Client(num_retries=10, delay_seconds=10, page_size=100)
+        search = arxiv.Search(
+            query=query,
+            max_results=max_results,
+            sort_by=arxiv.SortCriterion.SubmittedDate,
+            sort_order=arxiv.SortOrder.Ascending,
+        )
+        raw_papers = list(client.results(search))
+
+        if not self.retriever_config.get("include_cross_list", False):
+            raw_papers = [
+                paper for paper in raw_papers
+                if getattr(paper, "primary_category", None) in categories
+            ]
+        if self.config.executor.debug:
+            raw_papers = raw_papers[:10]
+        return raw_papers
+
     def convert_to_paper(self, raw_paper: ArxivResult) -> Paper:
         title = raw_paper.title
         authors = [a.name for a in raw_paper.authors]
         abstract = raw_paper.summary
         pdf_url = raw_paper.pdf_url
-        full_text = extract_text_from_tar(raw_paper)
-        if full_text is None:
-            full_text = extract_text_from_html(raw_paper)
-        if full_text is None:
-            full_text = extract_text_from_pdf(raw_paper)
+        full_text = None
+        if not self.retriever_config.get("metadata_only", False):
+            full_text = extract_text_from_tar(raw_paper)
+            if full_text is None:
+                full_text = extract_text_from_html(raw_paper)
+            if full_text is None:
+                full_text = extract_text_from_pdf(raw_paper)
         return Paper(
             source=self.name,
             title=title,

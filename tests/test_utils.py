@@ -133,6 +133,16 @@ def test_send_email_starttls_success(config, monkeypatch):
     assert "text/html" in body
 
 
+def test_send_email_uses_report_date_in_subject(config, monkeypatch):
+    sent = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+
+    send_email(config, "<html>historical</html>", report_date="2026-07-01")
+
+    assert len(sent) == 1
+    assert "Subject: Daily arXiv 2026/07/01" in sent[0][2]
+
+
 def test_send_email_falls_back_to_ssl(config, monkeypatch):
     sent = []
     call_count = {"smtp": 0}
