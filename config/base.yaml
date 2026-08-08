@@ -8,6 +8,24 @@ source:
   arxiv:
     category: null # The categories of target arxiv papers. Find the abbr of your research area from [here](https://arxiv.org/category_taxonomy). Example: ["cs.AI","cs.CV","cs.LG","cs.CL"]
     include_cross_list: false # Whether to include arXiv cross-list papers in subscribed categories. Example: true
+  openalex:
+    date: null # Historical report date in YYYY-MM-DD format.
+    source_id: S4306400194 # OpenAlex source ID for arXiv.
+    queries:
+      - computer vision
+      - visual recognition
+      - object detection
+      - image segmentation
+      - multimodal vision
+      - vision language model
+      - 3D reconstruction
+      - robot perception
+      - image video processing
+      - machine learning
+    per_page: 100
+    max_results: 500
+    request_delay_seconds: 0.25
+    conversion_delay_seconds: 0
   biorxiv:
     category: null # The categories of target biorxiv papers. Find categories from [here](https://www.biorxiv.org/). Example: ["biochemistry","animal behavior and cognition"]
   medrxiv:

@@ -68,10 +68,9 @@ def main(config: DictConfig) -> None:
         raise ValueError("BACKFILL_EMAIL_DELAY_SECONDS must not be negative")
 
     with open_dict(config):
-        config.source.arxiv.date = dates[0].isoformat()
-        config.source.arxiv.metadata_only = True
-        config.source.arxiv.max_results = max_results
-        config.source.arxiv.conversion_delay_seconds = 0
+        config.source.openalex.date = dates[0].isoformat()
+        config.source.openalex.max_results = max_results
+        config.executor.source = ["openalex"]
         config.executor.max_paper_num = max_papers
         config.executor.send_empty = send_empty
 
@@ -91,7 +90,7 @@ def main(config: DictConfig) -> None:
     failures: list[tuple[date, str]] = []
     for index, report_date in enumerate(dates):
         with open_dict(config):
-            config.source.arxiv.date = report_date.isoformat()
+            config.source.openalex.date = report_date.isoformat()
         logger.info(f"Backfilling Daily arXiv {report_date}")
         try:
             paper_count = executor.run(corpus=corpus, report_date=report_date.isoformat())
