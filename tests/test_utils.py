@@ -3,6 +3,8 @@
 import smtplib
 import tarfile
 import io
+from email import message_from_string
+from email.header import decode_header, make_header
 
 import pytest
 
@@ -140,7 +142,9 @@ def test_send_email_uses_report_date_in_subject(config, monkeypatch):
     send_email(config, "<html>historical</html>", report_date="2026-07-01")
 
     assert len(sent) == 1
-    assert "Subject: Daily arXiv 2026/07/01" in sent[0][2]
+    message = message_from_string(sent[0][2])
+    subject = str(make_header(decode_header(message["Subject"])))
+    assert subject == "Daily arXiv 2026/07/01"
 
 
 def test_send_email_falls_back_to_ssl(config, monkeypatch):
