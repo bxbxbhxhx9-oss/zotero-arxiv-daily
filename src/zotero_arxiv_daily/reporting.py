@@ -212,10 +212,16 @@ def generate_weekly_analysis(
     generation_kwargs = dict(llm_params.get("generation_kwargs", {}))
     weekly_max_output = int(llm_params.get("weekly_max_output_tokens", 7000))
     api_style = str(llm_params.get("api_style", "chat_completions"))
+    request_client = openai_client
+    if hasattr(openai_client, "with_options"):
+        request_client = openai_client.with_options(
+            timeout=float(llm_params.get("weekly_timeout_seconds", 600)),
+            max_retries=int(llm_params.get("weekly_max_retries", 2)),
+        )
     if api_style == "responses":
         generation_kwargs.pop("max_tokens", None)
         generation_kwargs["max_output_tokens"] = weekly_max_output
-        response = openai_client.responses.create(
+        response = request_client.responses.create(
             instructions=WEEKLY_INSTRUCTIONS,
             input=prompt,
             **generation_kwargs,
@@ -224,7 +230,7 @@ def generate_weekly_analysis(
     elif api_style == "chat_completions":
         generation_kwargs.pop("max_output_tokens", None)
         generation_kwargs["max_tokens"] = weekly_max_output
-        response = openai_client.chat.completions.create(
+        response = request_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": WEEKLY_INSTRUCTIONS},
                 {"role": "user", "content": prompt},

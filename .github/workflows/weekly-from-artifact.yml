@@ -1,0 +1,61 @@
+name: Generate weekly report from daily artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Workflow run ID containing the daily report artifact
+        required: true
+      start_date:
+        description: First report date (YYYY-MM-DD)
+        required: true
+      end_date:
+        description: Last report date (YYYY-MM-DD, maximum 7 days)
+        required: true
+
+jobs:
+  weekly-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Download archived daily reports
+        uses: actions/download-artifact@v4
+        with:
+          name: paper-reports-${{ inputs.start_date }}-${{ inputs.end_date }}
+          path: reports
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Generate and send weekly report
+        env:
+          ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
+          ZOTERO_KEY: ${{ secrets.ZOTERO_KEY }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CUSTOM_CONFIG: ${{ vars.CUSTOM_CONFIG }}
+          WEEKLY_START_DATE: ${{ inputs.start_date }}
+          WEEKLY_END_DATE: ${{ inputs.end_date }}
+          WEEKLY_INPUT_DIR: reports
+          WEEKLY_OUTPUT_DIR: reports
+        run: |
+          printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
+          uv run src/zotero_arxiv_daily/weekly.py
+
+      - name: Upload weekly report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-report-${{ inputs.start_date }}-${{ inputs.end_date }}
+          path: reports/weekly/
+          if-no-files-found: warn
+          retention-days: 90

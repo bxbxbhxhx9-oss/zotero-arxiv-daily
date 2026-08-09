@@ -53,6 +53,8 @@ llm:
   weekly_max_input_tokens: 50000
   weekly_max_output_tokens: 7000
   weekly_min_chinese_chars: 0
+  weekly_timeout_seconds: 600
+  weekly_max_retries: 2
   generation_kwargs:
   # Arguments for the LLM API. See [here](https://platform.openai.com/docs/api-reference/chat/create) for more details.
     max_tokens: 16384

@@ -67,6 +67,11 @@ The workflow writes UTF-8 JSON and Markdown under `reports/daily/` and
 `reports/weekly/`, then uploads the directory as a GitHub Actions artifact retained
 for 90 days. Email HTML escapes all model-generated content.
 
+If daily emails succeed but weekly synthesis times out, use the manual
+`weekly-from-artifact.yml` workflow with the failed run ID and the same date range.
+It validates that every daily JSON file is present, then retries only the weekly LLM
+call with the longer weekly timeout. It does not resend any daily email.
+
 For a complete month, run bounded weekly ranges instead of a single 31-day job. For
 July 2026 the ranges are `07-01..07-07`, `07-08..07-14`, `07-15..07-21`,
 `07-22..07-28`, and the partial week `07-29..07-31`. Pass `send_weekly=true` and

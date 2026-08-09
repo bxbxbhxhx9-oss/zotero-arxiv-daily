@@ -84,6 +84,38 @@ def test_generate_weekly_analysis_uses_responses_api_and_validates_sections():
     assert "[D01-P01]" in captured["input"]
 
 
+def test_generate_weekly_analysis_applies_independent_timeout_and_retries():
+    summary = "\n".join(
+        f"{section}\n有证据支持的综合结论 [D01-P01]。" for section in WEEKLY_SECTIONS
+    )
+    options = {}
+
+    class StubClient:
+        def __init__(self):
+            self.responses = SimpleNamespace(
+                create=lambda **kwargs: SimpleNamespace(output_text=summary)
+            )
+
+        def with_options(self, **kwargs):
+            options.update(kwargs)
+            return self
+
+    generate_weekly_analysis(
+        StubClient(),
+        {
+            "api_style": "responses",
+            "weekly_timeout_seconds": 600,
+            "weekly_max_retries": 2,
+            "generation_kwargs": {"model": "gpt-5.6-sol"},
+        },
+        "2026-07-01",
+        "2026-07-07",
+        [_daily_report()],
+    )
+
+    assert options == {"timeout": 600.0, "max_retries": 2}
+
+
 def test_generate_weekly_analysis_rejects_missing_sections():
     client = SimpleNamespace(
         responses=SimpleNamespace(
