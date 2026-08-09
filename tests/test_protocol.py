@@ -3,6 +3,7 @@
 import pytest
 
 from tests.canned_responses import make_sample_paper, make_stub_openai_client
+from zotero_arxiv_daily.protocol import ANALYSIS_SECTIONS
 
 
 @pytest.fixture()
@@ -53,6 +54,57 @@ def test_tldr_truncates_long_prompt(llm_params):
     paper = make_sample_paper(full_text="word " * 10000)
     result = paper.generate_tldr(client, llm_params)
     assert result is not None
+
+
+def test_responses_api_generates_required_chinese_analysis():
+    from types import SimpleNamespace
+
+    analysis = "\n".join(f"{section}\n有证据约束的中文分析。" for section in ANALYSIS_SECTIONS)
+    captured = {}
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(output_text=analysis)
+
+    client = SimpleNamespace(responses=SimpleNamespace(create=create))
+    paper = make_sample_paper()
+    params = {
+        "api_style": "responses",
+        "fail_on_error": True,
+        "require_chinese": True,
+        "require_structured_analysis": True,
+        "generation_kwargs": {
+            "model": "gpt-5.6",
+            "max_tokens": 16384,
+            "max_output_tokens": 2000,
+        },
+    }
+
+    assert paper.generate_tldr(client, params) == analysis
+    assert captured["model"] == "gpt-5.6"
+    assert captured["max_output_tokens"] == 2000
+    assert "max_tokens" not in captured
+
+
+def test_strict_analysis_raises_instead_of_falling_back():
+    from types import SimpleNamespace
+
+    client = SimpleNamespace(
+        responses=SimpleNamespace(
+            create=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("API down"))
+        )
+    )
+    paper = make_sample_paper()
+
+    with pytest.raises(RuntimeError, match="Rigorous analysis failed"):
+        paper.generate_tldr(
+            client,
+            {
+                "api_style": "responses",
+                "fail_on_error": True,
+                "generation_kwargs": {"model": "gpt-5.6"},
+            },
+        )
 
 
 # ---------------------------------------------------------------------------

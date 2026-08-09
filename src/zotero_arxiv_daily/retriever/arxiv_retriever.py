@@ -18,6 +18,7 @@ from datetime import date
 T = TypeVar("T")
 
 DOWNLOAD_TIMEOUT = (10, 60)
+HTML_EXTRACT_TIMEOUT = 120
 PDF_EXTRACT_TIMEOUT = 180
 TAR_EXTRACT_TIMEOUT = 180
 
@@ -254,5 +255,32 @@ def extract_text_from_tar(paper: ArxivResult) -> str | None:
         (source_url, paper.entry_id, paper.title),
         timeout=TAR_EXTRACT_TIMEOUT,
         operation="Tar extraction",
+        paper_title=paper.title,
+    )
+
+
+def extract_full_text_for_paper(paper: Paper) -> str | None:
+    if paper.url and "arxiv.org/abs/" in paper.url:
+        html_url = paper.url.replace("/abs/", "/html/")
+        full_text = _run_with_hard_timeout(
+            _extract_text_from_html_worker,
+            (html_url,),
+            timeout=HTML_EXTRACT_TIMEOUT,
+            operation="HTML extraction",
+            paper_title=paper.title,
+        )
+        if full_text:
+            return full_text
+
+    pdf_url = paper.pdf_url
+    if not pdf_url and paper.url and "arxiv.org/abs/" in paper.url:
+        pdf_url = paper.url.replace("/abs/", "/pdf/")
+    if not pdf_url:
+        return None
+    return _run_with_hard_timeout(
+        _extract_text_from_pdf_worker,
+        (pdf_url,),
+        timeout=PDF_EXTRACT_TIMEOUT,
+        operation="PDF extraction",
         paper_title=paper.title,
     )

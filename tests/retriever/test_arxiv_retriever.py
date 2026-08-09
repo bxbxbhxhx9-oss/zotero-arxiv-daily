@@ -118,6 +118,24 @@ def test_arxiv_retriever_rejects_invalid_historical_date(config):
         ArxivRetriever(config)._retrieve_raw_papers()
 
 
+def test_extract_full_text_for_paper_prefers_arxiv_html(monkeypatch):
+    paper = SimpleNamespace(
+        title="Selected paper",
+        url="https://arxiv.org/abs/2607.00001",
+        pdf_url="https://arxiv.org/pdf/2607.00001",
+    )
+    operations = []
+
+    def fake_run(func, args, **kwargs):
+        operations.append((args, kwargs["operation"]))
+        return "full paper text"
+
+    monkeypatch.setattr(arxiv_retriever, "_run_with_hard_timeout", fake_run)
+
+    assert arxiv_retriever.extract_full_text_for_paper(paper) == "full paper text"
+    assert operations == [(("https://arxiv.org/html/2607.00001",), "HTML extraction")]
+
+
 def test_run_with_hard_timeout_returns_value():
     result = _run_with_hard_timeout(
         _sleep_and_return, ("done", 0.01), timeout=1, operation="test op", paper_title="paper"

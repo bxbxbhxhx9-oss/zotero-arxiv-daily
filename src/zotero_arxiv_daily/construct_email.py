@@ -1,5 +1,6 @@
 from .protocol import Paper
 import math
+from html import escape
 
 
 framework = """
@@ -53,6 +54,11 @@ def get_empty_html():
   return block_template
 
 def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str=None):
+    analysis_html = escape(tldr or "分析未生成").replace("\n", "<br>")
+    safe_title = escape(title)
+    safe_authors = escape(authors)
+    safe_affiliations = escape(affiliations or "机构信息未提供")
+    safe_pdf_url = escape(pdf_url or "", quote=True)
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
@@ -69,23 +75,30 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
     </tr>
     <tr>
         <td style="font-size: 14px; color: #333; padding: 8px 0;">
-            <strong>Relevance:</strong> {rate}
+            <strong>相关性评分：</strong> {rate}
         </td>
     </tr>
     <tr>
         <td style="font-size: 14px; color: #333; padding: 8px 0;">
-            <strong>TLDR:</strong> {tldr}
+            <strong>逐篇严谨分析：</strong><br>{analysis_html}
         </td>
     </tr>
 
     <tr>
         <td style="padding: 8px 0;">
-            <a href="{pdf_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #d9534f; padding: 8px 16px; border-radius: 4px;">PDF</a>
+            <a href="{pdf_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #d9534f; padding: 8px 16px; border-radius: 4px;">论文原文</a>
         </td>
     </tr>
 </table>
 """
-    return block_template.format(title=title, authors=authors,rate=rate, tldr=tldr, pdf_url=pdf_url, affiliations=affiliations)
+    return block_template.format(
+        title=safe_title,
+        authors=safe_authors,
+        rate=rate,
+        analysis_html=analysis_html,
+        pdf_url=safe_pdf_url,
+        affiliations=safe_affiliations,
+    )
 
 def get_stars(score:float):
     full_star = '<span class="full-star">⭐</span>'

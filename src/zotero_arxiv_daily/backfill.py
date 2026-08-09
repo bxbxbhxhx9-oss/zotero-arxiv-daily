@@ -71,6 +71,7 @@ def main(config: DictConfig) -> None:
         config.source.openalex.date = dates[0].isoformat()
         config.source.openalex.max_results = max_results
         config.executor.source = ["openalex"]
+        config.executor.enrich_selected_full_text = True
         config.executor.max_paper_num = max_papers
         config.executor.send_empty = send_empty
 
@@ -100,6 +101,8 @@ def main(config: DictConfig) -> None:
         except Exception as exc:
             logger.exception(f"Backfill failed for {report_date}: {exc}")
             failures.append((report_date, str(exc)))
+            if config.llm.get("fail_on_error", False):
+                raise
         if index < len(dates) - 1 and email_delay > 0:
             sleep(email_delay)
 

@@ -38,7 +38,12 @@ class Executor:
             source: get_retriever_cls(source)(config) for source in config.executor.source
         }
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
-        self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
+        self.openai_client = OpenAI(
+            api_key=config.llm.api.key,
+            base_url=config.llm.api.base_url,
+            timeout=float(config.llm.get("timeout_seconds", 180)),
+            max_retries=int(config.llm.get("max_retries", 1)),
+        )
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("Fetching zotero corpus")
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
@@ -112,10 +117,18 @@ class Executor:
             logger.info("Reranking papers...")
             reranked_papers = self.reranker.rerank(all_papers, corpus)
             reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
-            logger.info("Generating TLDR and affiliations...")
+            if self.config.executor.get("enrich_selected_full_text", False):
+                from .retriever.arxiv_retriever import extract_full_text_for_paper
+
+                logger.info("Fetching full text for selected papers...")
+                for paper in tqdm(reranked_papers):
+                    if not paper.full_text:
+                        paper.full_text = extract_full_text_for_paper(paper)
+            logger.info("Generating rigorous paper analysis...")
             for p in tqdm(reranked_papers):
                 p.generate_tldr(self.openai_client, self.config.llm)
-                p.generate_affiliations(self.openai_client, self.config.llm)
+                if self.config.llm.get("generate_affiliations", True):
+                    p.generate_affiliations(self.openai_client, self.config.llm)
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
             return 0

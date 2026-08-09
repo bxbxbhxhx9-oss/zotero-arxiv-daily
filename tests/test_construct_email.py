@@ -12,6 +12,22 @@ def test_render_email_with_papers():
     assert "MIT" in html
 
 
+def test_render_email_escapes_generated_analysis():
+    papers = [
+        make_sample_paper(
+            score=7.5,
+            tldr="【核心结论】\n<script>alert('x')</script>",
+            affiliations=None,
+        )
+    ]
+
+    html = render_email(papers)
+
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+    assert "逐篇严谨分析" in html
+
+
 def test_render_email_empty_list():
     html = render_email([])
     assert "No Papers Today" in html

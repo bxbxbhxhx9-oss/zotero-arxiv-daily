@@ -42,6 +42,14 @@ llm:
   api:
     key: ??? # API Key of your LLM API. Example: sk-xxx
     base_url: ??? # API URL of your LLM API. Example: https://api.openai.com/v1
+  api_style: chat_completions # 'chat_completions' or 'responses'.
+  fail_on_error: false # Fail instead of silently using the English abstract.
+  require_chinese: false # Reject analysis without Chinese content.
+  require_structured_analysis: false # Require all rigorous-analysis sections.
+  generate_affiliations: true # Disable to avoid an extra LLM call per paper.
+  timeout_seconds: 180
+  max_retries: 1
+  analysis_max_input_tokens: 12000
   generation_kwargs:
   # Arguments for the LLM API. See [here](https://platform.openai.com/docs/api-reference/chat/create) for more details.
     max_tokens: 16384
