@@ -8,6 +8,11 @@ The daily workflow combines two research-skill patterns:
 
 The automated email analyzes at most three selected papers per report. Candidate
 papers are ranked against the user's Zotero corpus before full text is fetched.
+Each daily email and archived report contains the complete screening trace:
+
+1. The number of OpenAlex arXiv records retrieved by the configured queries.
+2. The Top 10 candidates after Zotero-based relevance ranking.
+3. The final Top 3 selected for full-text retrieval and LLM analysis.
 
 ## Required Sections
 
@@ -32,3 +37,45 @@ weights must be reported as missing rather than inferred.
 For the deployed configuration, an LLM error, non-Chinese response, empty response,
 or missing required section fails the workflow before email delivery. The workflow
 must never substitute an English abstract for a failed analysis.
+
+## Weekly Synthesis
+
+Historical backfill can generate one thematic weekly report from the daily Top 3
+analyses in the requested date range. The weekly report follows the synthesis and
+reproducibility patterns from
+[chenlu-hung/literature-review](https://github.com/chenlu-hung/literature-review):
+
+- Synthesis is organized by themes and method families, not paper-by-paper summaries.
+- Every claim cites a stable evidence ID such as `[D03-P02]`.
+- Numerical comparisons are allowed only when datasets, splits, metrics, and protocols
+  are comparable.
+- Author novelty claims are separated from evidence-supported and unverified novelty.
+- Code, data, checkpoints, hyperparameters, compute, repeated seeds, and uncertainty
+  reporting are checked explicitly.
+
+The required weekly sections are:
+
+1. Weekly overview
+2. Themes and method evolution
+3. Key-paper comparison
+4. Innovation evidence grading
+5. Experimental credibility and reproducibility
+6. Research gaps and risks
+7. Reading priorities for the next week
+
+The workflow writes UTF-8 JSON and Markdown under `reports/daily/` and
+`reports/weekly/`, then uploads the directory as a GitHub Actions artifact retained
+for 90 days. Email HTML escapes all model-generated content.
+
+For a complete month, run bounded weekly ranges instead of a single 31-day job. For
+July 2026 the ranges are `07-01..07-07`, `07-08..07-14`, `07-15..07-21`,
+`07-22..07-28`, and the partial week `07-29..07-31`. Pass `send_weekly=true` and
+`max_papers=3` to each workflow dispatch.
+
+## Scope Limitation
+
+Historical discovery uses OpenAlex records whose source is arXiv. These are preprints.
+The pipeline must not label a paper as accepted by an A-tier conference or journal
+unless the supplied metadata independently verifies that venue. The report can assess
+methodological quality and relevance, but it cannot infer an acceptance decision from
+an arXiv posting.

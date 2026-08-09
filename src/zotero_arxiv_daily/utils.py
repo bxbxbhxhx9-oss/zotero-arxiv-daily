@@ -139,7 +139,12 @@ def glob_match(path:str, pattern:str) -> bool:
     re_pattern = glob.translate(pattern,recursive=True)
     return re.match(re_pattern, path) is not None
 
-def send_email(config:DictConfig, html:str, report_date: str | datetime.date | None = None):
+def send_email(
+    config: DictConfig,
+    html: str,
+    report_date: str | datetime.date | None = None,
+    subject: str | None = None,
+):
     sender = config.email.sender
     receiver = config.email.receiver
     password = config.email.sender_password
@@ -152,13 +157,15 @@ def send_email(config:DictConfig, html:str, report_date: str | datetime.date | N
     msg = MIMEText(html, 'html', 'utf-8')
     msg['From'] = _format_addr('Github Action <%s>' % sender)
     msg['To'] = _format_addr('You <%s>' % receiver)
-    if report_date is None:
-        subject_date = datetime.datetime.now().strftime('%Y/%m/%d')
-    elif isinstance(report_date, datetime.date):
-        subject_date = report_date.strftime('%Y/%m/%d')
-    else:
-        subject_date = datetime.date.fromisoformat(report_date).strftime('%Y/%m/%d')
-    msg['Subject'] = Header(f'Daily arXiv {subject_date}', 'utf-8').encode()
+    if subject is None:
+        if report_date is None:
+            subject_date = datetime.datetime.now().strftime('%Y/%m/%d')
+        elif isinstance(report_date, datetime.date):
+            subject_date = report_date.strftime('%Y/%m/%d')
+        else:
+            subject_date = datetime.date.fromisoformat(report_date).strftime('%Y/%m/%d')
+        subject = f'每日 arXiv 论文报告 {subject_date}'
+    msg['Subject'] = Header(subject, 'utf-8').encode()
 
     try:
         server = smtplib.SMTP(smtp_server, smtp_port)

@@ -14,9 +14,14 @@ on:
       max_papers:
         description: Maximum recommended papers per day
         required: true
-        default: '5'
+        default: '3'
       send_empty:
         description: Send reports for dates without papers
+        required: true
+        type: boolean
+        default: false
+      send_weekly:
+        description: Generate and email a thematic weekly synthesis for this date range
         required: true
         type: boolean
         default: false
@@ -49,8 +54,19 @@ jobs:
           BACKFILL_END_DATE: ${{ inputs.end_date }}
           BACKFILL_MAX_PAPERS: ${{ inputs.max_papers }}
           BACKFILL_SEND_EMPTY: ${{ inputs.send_empty }}
+          BACKFILL_SEND_WEEKLY: ${{ inputs.send_weekly }}
           BACKFILL_MAX_RESULTS: '500'
           BACKFILL_EMAIL_DELAY_SECONDS: '8'
+          BACKFILL_OUTPUT_DIR: reports
         run: |
           printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
           uv run src/zotero_arxiv_daily/backfill.py
+
+      - name: Upload daily and weekly reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-reports-${{ inputs.start_date }}-${{ inputs.end_date }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 90

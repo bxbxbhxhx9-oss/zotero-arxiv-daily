@@ -30,7 +30,20 @@ def test_render_email_escapes_generated_analysis():
 
 def test_render_email_empty_list():
     html = render_email([])
-    assert "No Papers Today" in html
+    assert "今日未检索到符合条件的新论文" in html
+
+
+def test_render_email_includes_top_ten_selection_trace():
+    selected = make_sample_paper(title="Selected", score=9.0, tldr="分析")
+    candidate = make_sample_paper(title="Candidate", score=8.0)
+
+    html = render_email([selected], shortlist=[selected, candidate], candidate_count=489)
+
+    assert "检索 489 篇" in html
+    assert "Top 10" in html
+    assert "Selected" in html
+    assert "Candidate" in html
+    assert html.count("深度分析") == 1
 
 
 def test_render_email_author_truncation():
@@ -91,4 +104,4 @@ def test_get_block_html_contains_all_fields():
 
 def test_get_empty_html():
     html = get_empty_html()
-    assert "No Papers Today" in html
+    assert "今日未检索到符合条件的新论文" in html

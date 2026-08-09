@@ -205,6 +205,12 @@ def test_run_end_to_end(config, monkeypatch):
 
     # Assertions
     assert len(sent) == 1, "Email should have been sent"
+    assert executor.last_candidate_count == 2
+    assert [paper.title for paper in executor.last_shortlist] == [
+        "E2E Paper 1",
+        "E2E Paper 2",
+    ]
+    assert executor.last_report_papers == executor.last_shortlist
     _, _, email_body = sent[0]
     assert "text/html" in email_body
 

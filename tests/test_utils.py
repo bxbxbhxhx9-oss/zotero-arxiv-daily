@@ -144,7 +144,18 @@ def test_send_email_uses_report_date_in_subject(config, monkeypatch):
     assert len(sent) == 1
     message = message_from_string(sent[0][2])
     subject = str(make_header(decode_header(message["Subject"])))
-    assert subject == "Daily arXiv 2026/07/01"
+    assert subject == "每日 arXiv 论文报告 2026/07/01"
+
+
+def test_send_email_uses_custom_subject(config, monkeypatch):
+    sent = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+
+    send_email(config, "<html>weekly</html>", subject="计算机视觉论文周报 2026/07/01-2026/07/07")
+
+    message = message_from_string(sent[0][2])
+    subject = str(make_header(decode_header(message["Subject"])))
+    assert subject == "计算机视觉论文周报 2026/07/01-2026/07/07"
 
 
 def test_send_email_falls_back_to_ssl(config, monkeypatch):

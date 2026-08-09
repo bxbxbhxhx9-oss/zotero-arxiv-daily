@@ -10,6 +10,15 @@ from loguru import logger
 from omegaconf import DictConfig, open_dict
 
 from zotero_arxiv_daily.executor import Executor
+from zotero_arxiv_daily.reporting import (
+    build_daily_report,
+    build_weekly_report,
+    generate_weekly_analysis,
+    render_weekly_email,
+    write_daily_report,
+    write_weekly_report,
+)
+from zotero_arxiv_daily.utils import send_email
 
 
 def parse_date_range(start_value: str, end_value: str) -> list[date]:
@@ -59,6 +68,8 @@ def main(config: DictConfig) -> None:
     max_results = int(os.environ.get("BACKFILL_MAX_RESULTS", "500"))
     email_delay = float(os.environ.get("BACKFILL_EMAIL_DELAY_SECONDS", "8"))
     send_empty = parse_bool(os.environ.get("BACKFILL_SEND_EMPTY", "false"))
+    send_weekly = parse_bool(os.environ.get("BACKFILL_SEND_WEEKLY", "false"))
+    output_root = os.environ.get("BACKFILL_OUTPUT_DIR", "reports").strip()
 
     if not 1 <= max_papers <= 20:
         raise ValueError("BACKFILL_MAX_PAPERS must be between 1 and 20")
@@ -88,6 +99,7 @@ def main(config: DictConfig) -> None:
 
     emails_sent = 0
     papers_sent = 0
+    daily_reports: list[dict] = []
     failures: list[tuple[date, str]] = []
     for index, report_date in enumerate(dates):
         with open_dict(config):
@@ -95,6 +107,15 @@ def main(config: DictConfig) -> None:
         logger.info(f"Backfilling Daily arXiv {report_date}")
         try:
             paper_count = executor.run(corpus=corpus, report_date=report_date.isoformat())
+            daily_report = build_daily_report(
+                report_date=report_date.isoformat(),
+                candidate_count=executor.last_candidate_count,
+                shortlist=executor.last_shortlist,
+                selected_papers=executor.last_report_papers,
+            )
+            daily_reports.append(daily_report)
+            if output_root:
+                write_daily_report(output_root, daily_report)
             papers_sent += paper_count
             if paper_count > 0 or send_empty:
                 emails_sent += 1
@@ -106,9 +127,39 @@ def main(config: DictConfig) -> None:
         if index < len(dates) - 1 and email_delay > 0:
             sleep(email_delay)
 
+    weekly_email_sent = False
+    if send_weekly and daily_reports and papers_sent > 0 and not failures:
+        if email_delay > 0 and emails_sent > 0:
+            sleep(email_delay)
+        logger.info(
+            f"Generating weekly synthesis for {dates[0]} through {dates[-1]} "
+            f"from {papers_sent} selected papers"
+        )
+        weekly_summary = generate_weekly_analysis(
+            executor.openai_client,
+            config.llm,
+            dates[0].isoformat(),
+            dates[-1].isoformat(),
+            daily_reports,
+        )
+        weekly_report = build_weekly_report(
+            dates[0].isoformat(),
+            dates[-1].isoformat(),
+            daily_reports,
+            weekly_summary,
+        )
+        if output_root:
+            write_weekly_report(output_root, weekly_report)
+        subject = f"计算机视觉论文周报 {dates[0]:%Y/%m/%d}-{dates[-1]:%Y/%m/%d}"
+        send_email(config, render_weekly_email(weekly_report), subject=subject)
+        weekly_email_sent = True
+        logger.info("Weekly email sent successfully")
+    elif send_weekly:
+        logger.warning("Weekly synthesis skipped because no papers were selected or a daily report failed")
+
     logger.info(
         f"Backfill complete: {papers_sent} papers across {emails_sent} emails; "
-        f"{len(failures)} failed dates"
+        f"weekly_email_sent={weekly_email_sent}; {len(failures)} failed dates"
     )
     if failures:
         details = "; ".join(f"{day}: {error}" for day, error in failures)

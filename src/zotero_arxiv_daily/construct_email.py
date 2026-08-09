@@ -46,12 +46,44 @@ def get_empty_html():
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
   <tr>
     <td style="font-size: 20px; font-weight: bold; color: #333;">
-        No Papers Today. Take a Rest!
+        今日未检索到符合条件的新论文
     </td>
   </tr>
   </table>
   """
   return block_template
+
+
+def get_selection_html(
+    shortlist: list[Paper], candidate_count: int | None, selected_count: int
+) -> str:
+    if not shortlist:
+        return ""
+    rows = []
+    for index, paper in enumerate(shortlist, start=1):
+        title = escape(paper.title)
+        url = escape(paper.url or paper.pdf_url or "", quote=True)
+        score = f"{paper.score:.3f}" if paper.score is not None else "未评分"
+        selected = "深度分析" if index <= selected_count else "Top 10 候选"
+        rows.append(
+            "<tr>"
+            f'<td style="padding: 4px 8px;">{index}</td>'
+            f'<td style="padding: 4px 8px;"><a href="{url}">{title}</a></td>'
+            f'<td style="padding: 4px 8px;">{score}</td>'
+            f'<td style="padding: 4px 8px;">{selected}</td>'
+            "</tr>"
+        )
+    total = candidate_count if candidate_count is not None else len(shortlist)
+    return (
+        '<div style="font-family: Arial, sans-serif; margin-bottom: 16px;">'
+        f"<strong>筛选轨迹：</strong>检索 {total} 篇，按 Zotero 文献库相关性得到 Top 10，"
+        f"最终选择 {selected_count} 篇进行全文证据分析。"
+        '<table border="1" cellpadding="0" cellspacing="0" width="100%" '
+        'style="border-collapse: collapse; margin-top: 8px; font-size: 13px;">'
+        "<tr><th>排名</th><th>论文</th><th>相关性</th><th>状态</th></tr>"
+        + "".join(rows)
+        + "</table></div>"
+    )
 
 def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str=None):
     analysis_html = escape(tldr or "分析未生成").replace("\n", "<br>")
@@ -117,7 +149,11 @@ def get_stars(score:float):
         return '<div class="star-wrapper">'+full_star * full_star_num + half_star * half_star_num + '</div>'
 
 
-def render_email(papers:list[Paper]) -> str:
+def render_email(
+    papers: list[Paper],
+    shortlist: list[Paper] | None = None,
+    candidate_count: int | None = None,
+) -> str:
     parts = []
     if len(papers) == 0 :
         return framework.replace('__CONTENT__', get_empty_html())
@@ -140,5 +176,6 @@ def render_email(papers:list[Paper]) -> str:
             affiliations = 'Unknown Affiliation'
         parts.append(get_block_html(p.title, authors, rate, p.tldr, p.pdf_url, affiliations))
 
-    content = '<br>' + '</br><br>'.join(parts) + '</br>'
+    selection = get_selection_html(shortlist or [], candidate_count, len(papers))
+    content = selection + '<br>' + '</br><br>'.join(parts) + '</br>'
     return framework.replace('__CONTENT__', content)

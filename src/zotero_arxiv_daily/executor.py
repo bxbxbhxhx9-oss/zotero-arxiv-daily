@@ -44,6 +44,9 @@ class Executor:
             timeout=float(config.llm.get("timeout_seconds", 180)),
             max_retries=int(config.llm.get("max_retries", 1)),
         )
+        self.last_candidate_count = 0
+        self.last_shortlist = []
+        self.last_report_papers = []
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("Fetching zotero corpus")
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
@@ -96,6 +99,9 @@ class Executor:
 
     
     def run(self, corpus: list[CorpusPaper] | None = None, report_date: str | None = None) -> int:
+        self.last_candidate_count = 0
+        self.last_shortlist = []
+        self.last_report_papers = []
         if corpus is None:
             corpus = self.fetch_zotero_corpus()
             corpus = self.filter_corpus(corpus)
@@ -112,11 +118,13 @@ class Executor:
             logger.info(f"Retrieved {len(papers)} {source} papers")
             all_papers.extend(papers)
         logger.info(f"Total {len(all_papers)} papers retrieved from all sources")
+        self.last_candidate_count = len(all_papers)
         reranked_papers = []
         if len(all_papers) > 0:
             logger.info("Reranking papers...")
             reranked_papers = self.reranker.rerank(all_papers, corpus)
-            reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
+            self.last_shortlist = reranked_papers[:10]
+            reranked_papers = self.last_shortlist[:self.config.executor.max_paper_num]
             if self.config.executor.get("enrich_selected_full_text", False):
                 from .retriever.arxiv_retriever import extract_full_text_for_paper
 
@@ -129,11 +137,16 @@ class Executor:
                 p.generate_tldr(self.openai_client, self.config.llm)
                 if self.config.llm.get("generate_affiliations", True):
                     p.generate_affiliations(self.openai_client, self.config.llm)
+            self.last_report_papers = reranked_papers
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
             return 0
         logger.info("Sending email...")
-        email_content = render_email(reranked_papers)
+        email_content = render_email(
+            reranked_papers,
+            shortlist=self.last_shortlist,
+            candidate_count=self.last_candidate_count,
+        )
         send_email(self.config, email_content, report_date=report_date)
         logger.info("Email sent successfully")
         return len(reranked_papers)
