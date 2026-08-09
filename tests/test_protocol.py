@@ -107,6 +107,38 @@ def test_strict_analysis_raises_instead_of_falling_back():
         )
 
 
+def test_rigorous_analysis_uses_validated_fallback_model():
+    from types import SimpleNamespace
+
+    analysis = "\n".join(
+        f"{section}\n有证据约束的中文分析。" for section in ANALYSIS_SECTIONS
+    )
+    called_models = []
+
+    def create(**kwargs):
+        called_models.append(kwargs["model"])
+        if kwargs["model"] == "gpt-5.6-sol":
+            raise TimeoutError("primary timed out")
+        return SimpleNamespace(output_text=analysis)
+
+    client = SimpleNamespace(responses=SimpleNamespace(create=create))
+    paper = make_sample_paper()
+    result = paper.generate_tldr(
+        client,
+        {
+            "api_style": "responses",
+            "fail_on_error": True,
+            "require_chinese": True,
+            "require_structured_analysis": True,
+            "fallback_models": ["gpt-5.4"],
+            "generation_kwargs": {"model": "gpt-5.6-sol"},
+        },
+    )
+
+    assert result == analysis
+    assert called_models == ["gpt-5.6-sol", "gpt-5.4"]
+
+
 # ---------------------------------------------------------------------------
 # generate_affiliations
 # ---------------------------------------------------------------------------

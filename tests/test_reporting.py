@@ -116,6 +116,35 @@ def test_generate_weekly_analysis_applies_independent_timeout_and_retries():
     assert options == {"timeout": 600.0, "max_retries": 2}
 
 
+def test_generate_weekly_analysis_uses_fallback_model():
+    summary = "\n".join(
+        f"{section}\n有证据支持的综合结论 [D01-P01]。" for section in WEEKLY_SECTIONS
+    )
+    called_models = []
+
+    def create(**kwargs):
+        called_models.append(kwargs["model"])
+        if kwargs["model"] == "gpt-5.6-sol":
+            raise TimeoutError("primary timed out")
+        return SimpleNamespace(output_text=summary)
+
+    client = SimpleNamespace(responses=SimpleNamespace(create=create))
+    result = generate_weekly_analysis(
+        client,
+        {
+            "api_style": "responses",
+            "fallback_models": ["gpt-5.4"],
+            "generation_kwargs": {"model": "gpt-5.6-sol"},
+        },
+        "2026-07-01",
+        "2026-07-07",
+        [_daily_report()],
+    )
+
+    assert result == summary
+    assert called_models == ["gpt-5.6-sol", "gpt-5.4"]
+
+
 def test_generate_weekly_analysis_rejects_missing_sections():
     client = SimpleNamespace(
         responses=SimpleNamespace(

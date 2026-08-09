@@ -4,9 +4,10 @@ from html import escape
 from pathlib import Path
 
 import tiktoken
+from loguru import logger
 from openai import OpenAI
 
-from .protocol import Paper
+from .protocol import Paper, model_candidates
 
 
 WEEKLY_SECTIONS = [
@@ -218,46 +219,60 @@ def generate_weekly_analysis(
             timeout=float(llm_params.get("weekly_timeout_seconds", 600)),
             max_retries=int(llm_params.get("weekly_max_retries", 2)),
         )
-    if api_style == "responses":
-        generation_kwargs.pop("max_tokens", None)
-        generation_kwargs["max_output_tokens"] = weekly_max_output
-        response = request_client.responses.create(
-            instructions=WEEKLY_INSTRUCTIONS,
-            input=prompt,
-            **generation_kwargs,
-        )
-        summary = response.output_text
-    elif api_style == "chat_completions":
-        generation_kwargs.pop("max_output_tokens", None)
-        generation_kwargs["max_tokens"] = weekly_max_output
-        response = request_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": WEEKLY_INSTRUCTIONS},
-                {"role": "user", "content": prompt},
-            ],
-            **generation_kwargs,
-        )
-        summary = response.choices[0].message.content
-    else:
+    if api_style not in {"responses", "chat_completions"}:
         raise ValueError(f"Unsupported llm.api_style: {api_style}")
+    last_error = None
+    candidates = model_candidates(generation_kwargs, llm_params)
+    for model in candidates:
+        request_kwargs = dict(generation_kwargs)
+        if model is not None:
+            request_kwargs["model"] = model
+        try:
+            if api_style == "responses":
+                request_kwargs.pop("max_tokens", None)
+                request_kwargs["max_output_tokens"] = weekly_max_output
+                response = request_client.responses.create(
+                    instructions=WEEKLY_INSTRUCTIONS,
+                    input=prompt,
+                    **request_kwargs,
+                )
+                summary = response.output_text
+            else:
+                request_kwargs.pop("max_output_tokens", None)
+                request_kwargs["max_tokens"] = weekly_max_output
+                response = request_client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": WEEKLY_INSTRUCTIONS},
+                        {"role": "user", "content": prompt},
+                    ],
+                    **request_kwargs,
+                )
+                summary = response.choices[0].message.content
 
-    if not summary or not summary.strip():
-        raise RuntimeError("LLM returned an empty weekly report")
-    if not re.search(r"[\u4e00-\u9fff]", summary):
-        raise RuntimeError("Weekly report does not contain Chinese text")
-    missing = [section for section in WEEKLY_SECTIONS if section not in summary]
-    if missing:
-        raise RuntimeError(f"Weekly report is missing required sections: {missing}")
-    if not re.search(r"\[D\d{2}-P\d{2}\]", summary):
-        raise RuntimeError("Weekly report does not contain evidence citations")
-    minimum_chinese_chars = int(llm_params.get("weekly_min_chinese_chars", 0))
-    chinese_char_count = len(re.findall(r"[\u4e00-\u9fff]", summary))
-    if chinese_char_count < minimum_chinese_chars:
-        raise RuntimeError(
-            f"Weekly report is too short: {chinese_char_count} Chinese characters; "
-            f"minimum is {minimum_chinese_chars}"
-        )
-    return summary.strip()
+            if not summary or not summary.strip():
+                raise RuntimeError("LLM returned an empty weekly report")
+            if not re.search(r"[\u4e00-\u9fff]", summary):
+                raise RuntimeError("Weekly report does not contain Chinese text")
+            missing = [section for section in WEEKLY_SECTIONS if section not in summary]
+            if missing:
+                raise RuntimeError(f"Weekly report is missing required sections: {missing}")
+            if not re.search(r"\[D\d{2}-P\d{2}\]", summary):
+                raise RuntimeError("Weekly report does not contain evidence citations")
+            minimum_chinese_chars = int(llm_params.get("weekly_min_chinese_chars", 0))
+            chinese_char_count = len(re.findall(r"[\u4e00-\u9fff]", summary))
+            if chinese_char_count < minimum_chinese_chars:
+                raise RuntimeError(
+                    f"Weekly report is too short: {chinese_char_count} Chinese characters; "
+                    f"minimum is {minimum_chinese_chars}"
+                )
+            if model != candidates[0]:
+                logger.info(f"Weekly synthesis succeeded with fallback model {model}")
+            return summary.strip()
+        except Exception as exc:
+            last_error = exc
+            logger.warning(f"Weekly synthesis model {model or '<default>'} failed: {exc}")
+
+    raise RuntimeError(f"All configured weekly LLM models failed: {last_error}") from last_error
 
 
 def build_weekly_report(

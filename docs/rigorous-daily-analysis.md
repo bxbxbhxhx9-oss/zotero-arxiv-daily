@@ -38,6 +38,11 @@ For the deployed configuration, an LLM error, non-Chinese response, empty respon
 or missing required section fails the workflow before email delivery. The workflow
 must never substitute an English abstract for a failed analysis.
 
+The deployed relay configuration keeps `gpt-5.6-sol` as the primary model and uses
+the independently probed `gpt-5.4` as a fallback. A timeout, server error, empty
+response, or failed structure check advances to the fallback model. Both models must
+pass the same Chinese evidence and section validation; this is not an abstract fallback.
+
 ## Weekly Synthesis
 
 Historical backfill can generate one thematic weekly report from the daily Top 3

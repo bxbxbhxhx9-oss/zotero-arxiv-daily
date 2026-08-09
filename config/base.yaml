@@ -49,6 +49,7 @@ llm:
   generate_affiliations: true # Disable to avoid an extra LLM call per paper.
   timeout_seconds: 180
   max_retries: 1
+  fallback_models: []
   analysis_max_input_tokens: 12000
   weekly_max_input_tokens: 50000
   weekly_max_output_tokens: 7000
