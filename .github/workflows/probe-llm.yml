@@ -1,0 +1,103 @@
+name: Probe LLM relay
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: OpenAI-compatible API base URL
+        required: true
+        default: 'https://www.boxying.com/v1'
+      candidate_models:
+        description: Comma-separated model IDs to test with the Responses API
+        required: true
+        default: 'gpt-5.6,gpt-5.4,gpt-5.2,gpt-5.1,gpt-5,gpt-4.1,gpt-4o'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LLM_BASE_URL: ${{ inputs.base_url }}
+      CANDIDATE_MODELS: ${{ inputs.candidate_models }}
+    steps:
+      - name: List and probe models
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+
+          api_key = os.environ["OPENAI_API_KEY"]
+          base_url = os.environ["LLM_BASE_URL"].rstrip("/")
+          candidates = [
+              model.strip()
+              for model in os.environ["CANDIDATE_MODELS"].split(",")
+              if model.strip()
+          ]
+
+
+          def request(path, payload=None):
+              headers = {"Authorization": f"Bearer {api_key}"}
+              data = None
+              if payload is not None:
+                  headers["Content-Type"] = "application/json"
+                  data = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  f"{base_url}{path}", data=data, headers=headers
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as response:
+                      return response.status, json.load(response)
+              except urllib.error.HTTPError as exc:
+                  try:
+                      body = json.load(exc)
+                  except (json.JSONDecodeError, UnicodeDecodeError):
+                      body = {}
+                  return exc.code, body
+
+
+          status, body = request("/models")
+          if status == 200:
+              model_ids = sorted(
+                  item["id"]
+                  for item in body.get("data", [])
+                  if isinstance(item, dict) and isinstance(item.get("id"), str)
+              )
+              print(f"MODELS endpoint: HTTP {status}")
+              print("Declared model IDs:")
+              for model_id in model_ids:
+                  print(f"  - {model_id}")
+          else:
+              error = body.get("error", {}) if isinstance(body, dict) else {}
+              print(f"MODELS endpoint: HTTP {status}, code={error.get('code', 'unknown')}")
+
+          print("Responses API probes:")
+          available = []
+          for model in candidates:
+              status, body = request(
+                  "/responses",
+                  {
+                      "model": model,
+                      "input": "只回复：可用",
+                      "max_output_tokens": 20,
+                  },
+              )
+              if status == 200:
+                  available.append(model)
+                  print(f"  AVAILABLE {model}: HTTP {status}")
+              else:
+                  error = body.get("error", {}) if isinstance(body, dict) else {}
+                  print(
+                      f"  UNAVAILABLE {model}: HTTP {status}, "
+                      f"code={error.get('code', 'unknown')}"
+                  )
+
+          if not available:
+              raise SystemExit("No candidate model passed the Responses API probe")
+          print("Available candidates: " + ", ".join(available))
+          PY
