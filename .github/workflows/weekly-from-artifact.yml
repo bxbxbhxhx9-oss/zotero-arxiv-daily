@@ -6,6 +6,14 @@ on:
       source_run_id:
         description: Workflow run ID containing the daily report artifact
         required: true
+      additional_source_run_id:
+        description: Optional second workflow run ID containing remaining daily reports
+        required: false
+        default: ''
+      additional_artifact_name:
+        description: Artifact name for the optional second workflow run
+        required: false
+        default: ''
       start_date:
         description: First report date (YYYY-MM-DD)
         required: true
@@ -35,6 +43,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.source_run_id }}
+
+      - name: Download additional archived daily reports
+        if: ${{ inputs.additional_source_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.additional_artifact_name }}
+          path: reports
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.additional_source_run_id }}
 
       - name: Generate and send weekly report
         env:

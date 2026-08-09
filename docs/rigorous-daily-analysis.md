@@ -76,6 +76,9 @@ If daily emails succeed but weekly synthesis times out, use the manual
 `weekly-from-artifact.yml` workflow with the failed run ID and the same date range.
 It validates that every daily JSON file is present, then retries only the weekly LLM
 call with the longer weekly timeout. It does not resend any daily email.
+For a resumed range, provide `additional_source_run_id` and
+`additional_artifact_name`; the workflow merges the non-overlapping daily files and
+refuses to synthesize until every date in the requested week is present.
 
 For a complete month, run bounded weekly ranges instead of a single 31-day job. For
 July 2026 the ranges are `07-01..07-07`, `07-08..07-14`, `07-15..07-21`,
