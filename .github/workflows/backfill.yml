@@ -15,6 +15,11 @@ on:
         description: Maximum recommended papers per day
         required: true
         default: '3'
+      send_daily:
+        description: Send each daily report by email
+        required: true
+        type: boolean
+        default: true
       send_empty:
         description: Send reports for dates without papers
         required: true
@@ -53,6 +58,7 @@ jobs:
           BACKFILL_START_DATE: ${{ inputs.start_date }}
           BACKFILL_END_DATE: ${{ inputs.end_date }}
           BACKFILL_MAX_PAPERS: ${{ inputs.max_papers }}
+          BACKFILL_SEND_DAILY: ${{ inputs.send_daily }}
           BACKFILL_SEND_EMPTY: ${{ inputs.send_empty }}
           BACKFILL_SEND_WEEKLY: ${{ inputs.send_weekly }}
           BACKFILL_MAX_RESULTS: '500'

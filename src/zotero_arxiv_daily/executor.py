@@ -98,7 +98,12 @@ class Executor:
         return corpus
 
     
-    def run(self, corpus: list[CorpusPaper] | None = None, report_date: str | None = None) -> int:
+    def run(
+        self,
+        corpus: list[CorpusPaper] | None = None,
+        report_date: str | None = None,
+        send_report: bool = True,
+    ) -> int:
         self.last_candidate_count = 0
         self.last_shortlist = []
         self.last_report_papers = []
@@ -141,12 +146,15 @@ class Executor:
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
             return 0
-        logger.info("Sending email...")
-        email_content = render_email(
-            reranked_papers,
-            shortlist=self.last_shortlist,
-            candidate_count=self.last_candidate_count,
-        )
-        send_email(self.config, email_content, report_date=report_date)
-        logger.info("Email sent successfully")
+        if send_report:
+            logger.info("Sending email...")
+            email_content = render_email(
+                reranked_papers,
+                shortlist=self.last_shortlist,
+                candidate_count=self.last_candidate_count,
+            )
+            send_email(self.config, email_content, report_date=report_date)
+            logger.info("Email sent successfully")
+        else:
+            logger.info("Daily email disabled; report data retained for weekly synthesis")
         return len(reranked_papers)

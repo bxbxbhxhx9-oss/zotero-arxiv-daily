@@ -67,6 +67,7 @@ def main(config: DictConfig) -> None:
     max_papers = int(os.environ.get("BACKFILL_MAX_PAPERS", "5"))
     max_results = int(os.environ.get("BACKFILL_MAX_RESULTS", "500"))
     email_delay = float(os.environ.get("BACKFILL_EMAIL_DELAY_SECONDS", "8"))
+    send_daily = parse_bool(os.environ.get("BACKFILL_SEND_DAILY", "true"))
     send_empty = parse_bool(os.environ.get("BACKFILL_SEND_EMPTY", "false"))
     send_weekly = parse_bool(os.environ.get("BACKFILL_SEND_WEEKLY", "false"))
     output_root = os.environ.get("BACKFILL_OUTPUT_DIR", "reports").strip()
@@ -106,7 +107,11 @@ def main(config: DictConfig) -> None:
             config.source.openalex.date = report_date.isoformat()
         logger.info(f"Backfilling Daily arXiv {report_date}")
         try:
-            paper_count = executor.run(corpus=corpus, report_date=report_date.isoformat())
+            paper_count = executor.run(
+                corpus=corpus,
+                report_date=report_date.isoformat(),
+                send_report=send_daily,
+            )
             daily_report = build_daily_report(
                 report_date=report_date.isoformat(),
                 candidate_count=executor.last_candidate_count,
@@ -117,7 +122,7 @@ def main(config: DictConfig) -> None:
             if output_root:
                 write_daily_report(output_root, daily_report)
             papers_sent += paper_count
-            if paper_count > 0 or send_empty:
+            if send_daily and (paper_count > 0 or send_empty):
                 emails_sent += 1
         except Exception as exc:
             logger.exception(f"Backfill failed for {report_date}: {exc}")

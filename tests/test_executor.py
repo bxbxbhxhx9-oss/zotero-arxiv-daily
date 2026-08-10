@@ -287,3 +287,43 @@ def test_run_no_papers_send_empty_true(config, monkeypatch):
     assert len(sent) == 1, "Email should be sent even with no papers when send_empty=true"
     _, _, body = sent[0]
     assert "text/html" in body
+
+
+def test_run_can_retain_report_without_sending_daily_email(config, monkeypatch):
+    """Weekly-only backfills analyze papers without sending daily email."""
+    import smtplib
+
+    from omegaconf import open_dict
+
+    from tests.canned_responses import (
+        make_sample_corpus,
+        make_sample_paper,
+        make_stub_openai_client,
+        make_stub_smtp,
+    )
+
+    with open_dict(config):
+        config.executor.source = ["arxiv"]
+        config.executor.reranker = "api"
+        config.executor.send_empty = True
+
+    stub_client = make_stub_openai_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.OpenAI", lambda **kw: stub_client)
+    monkeypatch.setattr("zotero_arxiv_daily.reranker.api.OpenAI", lambda **kw: stub_client)
+
+    import zotero_arxiv_daily.retriever.arxiv_retriever  # noqa: F401
+
+    from zotero_arxiv_daily.retriever.base import registered_retrievers
+
+    papers = [make_sample_paper(title="Weekly-only paper", score=None)]
+    monkeypatch.setattr(registered_retrievers["arxiv"], "retrieve_papers", lambda self: papers)
+
+    sent = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+
+    executor = Executor(config)
+    paper_count = executor.run(corpus=make_sample_corpus(1), send_report=False)
+
+    assert paper_count == 1
+    assert executor.last_report_papers == papers
+    assert sent == []
